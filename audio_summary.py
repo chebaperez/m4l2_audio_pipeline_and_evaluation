@@ -1,0 +1,145 @@
+"""
+Live Coding: Audio Pipeline para el resumen de audios.
+Este script demuestra cómo extraer información de audios
+utilizando 'whisper' y resumiendolo con 'gpt-4o-mini'.
+"""
+
+import os
+import argparse
+from dotenv import load_dotenv
+from openai import OpenAI
+import jiwer
+
+
+load_dotenv()
+TRANSCRIPTION_MODEL = "gpt-4o-transcribe"#"whisper-1"
+SUMMARY_MODEL = "gpt-4o-mini"
+
+
+def audio_pipeline(audio_path: str) -> str | None:
+    """Pipeline para transcribir y resumir un archivo de audio."""
+
+    print(f"\n🚀 Iniciando pipeline de audio: {os.path.basename(audio_path)}")
+
+    # Initialize OpenAI client
+    client = OpenAI()
+
+    # --- Run ASR (Transcription) ---
+    if not os.path.exists(audio_path):
+        print(f"❌ Error: No se encuentra el archivo de audio en {audio_path}")
+        return None
+
+    print(f"🎙️ Transcribiendo audio...")
+    try:
+        with open(audio_path, "rb") as audio_file:
+            transcript_response = client.audio.transcriptions.create(
+                model=TRANSCRIPTION_MODEL,
+                file=audio_file,
+                language="es",
+                response_format="text"
+            )
+        transcript = transcript_response.strip()
+    except Exception as e:
+        print(f"❌ Error durante la transcripción: {e}")
+        return None
+
+    print("\n📝 Transcripción obtenida:")
+    print("-" * 30)
+    print(transcript)
+    print("-" * 30)
+
+    if not transcript:
+        print("\n⚠️ Advertencia: La API devolvió una transcripción vacía.")
+        return transcript
+
+    # --- Run Summarization ---
+    print("\n🧠 Generando resumen...")
+    try:
+        response = client.chat.completions.create(
+            model=SUMMARY_MODEL,
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Eres un asistente experto en resumir transcripciones de audio de forma concisa y clara en español."
+                },
+                {
+                    "role": "user", 
+                    "content": f"Por favor, resume el siguiente texto extraído de un audio:\n\n{transcript}"
+                }
+            ],
+            temperature=0.7,
+            max_tokens=50
+        )
+        summary_text = response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ Error durante el resumen: {e}")
+        return transcript
+
+    print("\n✨ Resumen del audio:")
+    print("=" * 30)
+    print(summary_text)
+    print("=" * 30)
+
+    return transcript
+
+
+def evaluate_wer(original_text: str, transcript_text: str) -> float:
+
+    # Normalizamos textos para no penalizar por mayúsculas o comas
+    transformacion = jiwer.Compose([
+        jiwer.ToLowerCase(),
+        jiwer.RemovePunctuation(),
+        jiwer.RemoveMultipleSpaces(),
+        jiwer.Strip()
+    ])
+
+    original_norm = transformacion(original_text)
+    transcrito_norm = transformacion(transcript_text)
+
+    # Calculamos el error matemático
+    wer_score = jiwer.wer(original_norm, transcrito_norm)
+    medidas = jiwer.process_words(original_norm, transcrito_norm)
+
+    print("\n✨ Evaluación WER de la transcripción")
+    print("=" * 40)
+    print(f"Texto original : {original_norm}")
+    print(f"Texto transcrito: {transcrito_norm}")
+    print("-" * 40)
+    print(f"Word Error Rate (WER) : {wer_score * 100:.2f}%")
+    print(f"Sustituciones (S)      : {medidas.substitutions}")
+    print(f"Inserciones (I)        : {medidas.insertions}")
+    print(f"Eliminaciones (D)      : {medidas.deletions}")
+    print("=" * 40)
+
+    return wer_score
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Transcribe and summarize an audio file using OpenAI APIs."
+    )
+    parser.add_argument(
+        "--audio",
+        type=str,
+        default="resources/support_call_clean.wav",
+        help="Path to the audio file (default: resources/support_call_clean.wav)"
+    )
+    parser.add_argument(
+        "--wer",
+        type=str,
+        default=None,
+        help="Path to a TXT file containing the original reference transcript for WER evaluation."
+    )
+    args = parser.parse_args()
+
+    transcript = audio_pipeline(audio_path=args.audio)
+
+    if args.wer:
+        if not os.path.exists(args.wer):
+            print(f"❌ Error: No se encuentra el archivo de referencia WER en {args.wer}")
+        elif transcript is None:
+            print("❌ No se pudo obtener la transcripción para evaluar WER.")
+        else:
+            with open(args.wer, "r", encoding="utf-8") as ref_file:
+                original_text = ref_file.read()
+            evaluate_wer(original_text, transcript)
