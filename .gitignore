@@ -27,10 +27,5 @@ wheels/
 venv/
 ENV/
 
-# Data
-*.wav
-*.mp3
-*.m4a
-
 # OS
 .DS_Store
