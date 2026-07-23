@@ -12,18 +12,13 @@ import jiwer
 
 
 load_dotenv()
-TRANSCRIPTION_MODEL = "gpt-4o-transcribe"#"whisper-1"
+TRANSCRIPTION_MODEL = "gpt-4o-transcribe" #"whisper-1"
 SUMMARY_MODEL = "gpt-4o-mini"
+TTS_MODEL = "gpt-4o-mini-tts"
 
 
-def audio_pipeline(audio_path: str) -> str | None:
-    """Pipeline para transcribir y resumir un archivo de audio."""
-
-    print(f"\n🚀 Iniciando pipeline de audio: {os.path.basename(audio_path)}")
-
-    # Initialize OpenAI client
-    client = OpenAI()
-
+def transcribe_audio(client: OpenAI, audio_path: str) -> str | None:
+    """Transcribe un archivo de audio."""
     # --- Run ASR (Transcription) ---
     if not os.path.exists(audio_path):
         print(f"❌ Error: No se encuentra el archivo de audio en {audio_path}")
@@ -50,8 +45,12 @@ def audio_pipeline(audio_path: str) -> str | None:
 
     if not transcript:
         print("\n⚠️ Advertencia: La API devolvió una transcripción vacía.")
-        return transcript
 
+    return transcript
+
+
+def summarize_transcript(client: OpenAI, transcript: str) -> str | None:
+    """Genera un resumen breve de una transcripción."""
     # --- Run Summarization ---
     print("\n🧠 Generando resumen...")
     try:
@@ -60,25 +59,64 @@ def audio_pipeline(audio_path: str) -> str | None:
             messages=[
                 {
                     "role": "system", 
-                    "content": "Eres un asistente experto en resumir transcripciones de audio de forma concisa y clara en español."
+                    "content": "Eres un asistente encargado de resumir transcripciones de audio de forma concisa y clara en español."
                 },
                 {
                     "role": "user", 
-                    "content": f"Por favor, resume el siguiente texto extraído de un audio:\n\n{transcript}"
+                    "content": f"Por favor, resume el siguiente texto extraído de un audio en 25 palabras como máximo:\n\n{transcript}"
                 }
             ],
             temperature=0.7,
-            max_tokens=50
+            max_tokens=35
         )
-        summary_text = response.choices[0].message.content.strip()
+        summary_text = response.choices[0].message.content.strip() # type: ignore
     except Exception as e:
         print(f"❌ Error durante el resumen: {e}")
-        return transcript
+        return None
 
     print("\n✨ Resumen del audio:")
     print("=" * 30)
     print(summary_text)
     print("=" * 30)
+
+    return summary_text
+
+
+def convert_summary_to_speech(
+    client: OpenAI, summary_text: str, audio_path: str
+) -> None:
+    """Convierte el resumen en un archivo wav."""
+    # --- Convert Summary to Speech ---
+    summary_audio_path = f"{os.path.splitext(audio_path)[0]}_summary.wav"
+    print("\n🔊 Convirtiendo resumen a audio...")
+    try:
+        audio_response = client.audio.speech.create(
+            model=TTS_MODEL,
+            voice="coral",
+            input=summary_text,
+            instructions="Habla en español rioplatense con un tono claro y natural."
+        )
+        audio_response.write_to_file(summary_audio_path)
+        print(f"✅ Audio del resumen guardado en: {summary_audio_path}")
+    except Exception as e:
+        print(f"❌ Error durante la generación del audio: {e}")
+
+
+def audio_pipeline(audio_path: str) -> str | None:
+    """Pipeline para transcribir, resumir y generar audio."""
+
+    print(f"\n🚀 Iniciando pipeline de audio: {os.path.basename(audio_path)}")
+
+    # Initialize OpenAI client
+    client = OpenAI()
+
+    transcript = transcribe_audio(client, audio_path)
+    if not transcript:
+        return transcript
+
+    summary_text = summarize_transcript(client, transcript)
+    if summary_text:
+        convert_summary_to_speech(client, summary_text, audio_path)
 
     return transcript
 
@@ -121,8 +159,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--audio",
         type=str,
-        default="resources/support_call_clean.wav",
-        help="Path to the audio file (default: resources/support_call_clean.wav)"
+        default="resources/demo.wav",
+        help="Path to the audio file (default: resources/demo.wav)"
     )
     parser.add_argument(
         "--wer",

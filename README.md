@@ -1,13 +1,14 @@
 # M4L2: Audio Pipelines y Evaluación en AI
 
-Este repositorio contiene una implementación práctica de un pipeline de audio para transcripción, resumen automático y evaluación de precisión utilizando los servicios de **OpenAI** y métricas estándar de la industria.
+Este repositorio contiene una implementación práctica de un pipeline de audio para transcripción, resumen automático, generación de audio y evaluación de precisión utilizando los servicios de **OpenAI** y métricas estándar de la industria.
 
 ## Descripción
 
 El script `audio_summary.py` permite procesar archivos de audio para:
-1. **Transcripción (ASR):** Convierte voz a texto utilizando `whisper-1` de OpenAI.
+1. **Transcripción (ASR):** Convierte voz a texto utilizando `gpt-4o-transcribe` de OpenAI.
 2. **Resumen:** Genera un resumen conciso y coherente del texto transcrito utilizando `gpt-4o-mini`.
-3. **Evaluación (WER):** Calcula el **Word Error Rate (WER)** comparando la transcripción generada contra un texto de referencia (ground truth), permitiendo medir objetivamente la calidad del pipeline.
+3. **Texto a voz (TTS):** Convierte el resumen en un archivo WAV utilizando `gpt-4o-mini-tts`.
+4. **Evaluación (WER):** Calcula el **Word Error Rate (WER)** comparando la transcripción generada contra un texto de referencia (ground truth), permitiendo medir objetivamente la calidad del pipeline.
 
 A diferencia de las implementaciones locales, este script utiliza APIs en la nube, lo que facilita el despliegue y elimina la necesidad de hardware especializado.
 
@@ -39,7 +40,7 @@ A diferencia de las implementaciones locales, este script utiliza APIs en la nub
 
 ## Estructura del Proyecto
 
-- `audio_summary.py`: Script principal que integra ASR, resumen y evaluación.
+- `audio_summary.py`: Script principal que integra ASR, resumen, TTS y evaluación.
 - `requirements.txt`: Dependencias del proyecto (`openai`, `python-dotenv`, `jiwer`).
 - `resources/`: Carpeta con audios de prueba y textos de referencia.
 - `.env_example`: Plantilla para la configuración de la API Key.
@@ -47,31 +48,29 @@ A diferencia de las implementaciones locales, este script utiliza APIs en la nub
 
 ### Estructura de Recursos
 
-El directorio `resources/` contiene archivos de prueba con diferentes niveles de calidad para experimentar con el pipeline y su evaluación:
+El directorio `resources/` contiene archivos de prueba para experimentar con el pipeline y su evaluación:
 
-- `support_call_clean.wav`: Audio limpio de referencia.
-- `support_call_white_noise.wav`: Audio con ruido de fondo.
-- `support_call_cutted.wav`: Audio degradado.
-- `support_call_destroyed.wav`: Audio con degradación severa.
-- `original_text.txt`: Transcripción manual (ground truth) para evaluar el WER.
+- `demo.txt`: Texto de referencia para grabar un audio de prueba.
+- `support_call.txt`: Texto de referencia para evaluar el WER.
 
 ## Uso
 
-### Transcripción y Resumen (Básico)
+### Transcripción, Resumen y Audio del Resumen (Básico)
 Ejecuta el script principal con los valores por defecto:
 ```bash
 python audio_summary.py
 ```
 
+El script guarda el audio del resumen junto al archivo original, con el sufijo `_summary.wav`.
+
 ### Especificar un audio diferente
 ```bash
-python audio_summary.py --audio "resources/support_call_white_noise.wav"
+python audio_summary.py --audio "resources/demo.mp3"
 ```
 
 ### Evaluación de Precisión (WER)
 Para evaluar la calidad de la transcripción comparándola con el texto original:
 ```bash
-python audio_summary.py --wer "resources/original_text.txt"
-python audio_summary.py --audio "resources/support_call_white_noise.wav" --wer "resources/original_text.txt"
+python audio_summary.py --wer "resources/demo.txt"
+python audio_summary.py --audio "resources/demo.mp3" --wer "resources/demo.txt"
 ```
-
